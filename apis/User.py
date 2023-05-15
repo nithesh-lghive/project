@@ -4,6 +4,9 @@ data =[{'id':'0','name':'prakash','email':'prak@gmail.com','password':'12345'},
        {'id':'2','name':'divya','email':'div@gmail.com','password':'768999'}]
 
 from flask_restx import Resource,Namespace
+from apis.util import token_required
+
+
 
 
 
@@ -22,8 +25,11 @@ kl.add_argument('password',type = int,help = 'Enter the password')
 
 @user.route('/')
 @user.doc(responses = {200:"ok",400:'not found'})
+
 class User(Resource):
     global data
+    @user.doc(security='apikey')
+    @token_required
     @user.expect(aru)
     def get(self):
         args  = aru.parse_args()
@@ -36,6 +42,8 @@ class User(Resource):
             return {'message':'User Not Found'},400
         
     @user.expect(kl)
+    @user.doc(security='apikey')
+    @token_required
     def post(self):
         args = kl.parse_args()
         id = args.get('id')
@@ -53,6 +61,8 @@ class User(Resource):
             return {'messag':'unsuccessful'}
         
     @user.expect(aru)
+    @user.doc(security='apikey')
+    @token_required
     def delete(self):
         args = aru.parse_args()
         id = args.get('id')
@@ -68,6 +78,8 @@ class User(Resource):
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
     global data
+    @user.doc(security='apikey')
+    @token_required
     def get(self):
         return data
     
@@ -85,7 +97,8 @@ rl.add_argument('role',type = str,help = 'What is role of user')
 
 class Update(Resource):
     global data
-    
+    @userrole.doc(security='apikey')
+    @token_required
     @userrole.expect(rl)
     def put(self):
         args = rl.parse_args()
