@@ -1,15 +1,23 @@
 
-data = {"prakash":"{'salary':'10000'}","ravi":"{'salary':'50000'}"}
+data =[{'id':'0','name':'prakash','email':'prak@gmail.com','password':'12345'},
+       {'id':'1','name':'nithesh','email':'nith@gmail.com','password':'56789'},
+       {'id':'2','name':'divya','email':'div@gmail.com','password':'768999'}]
 
 from flask_restx import Resource,Namespace
 
-user = Namespace('User','User details')
+
+
+user = Namespace('User Management','User details')
+
 kl = user.parser()
 aru = user.parser()
 
-aru.add_argument('name',type = str,help = 'what is the name !')
-kl.add_argument('fname',type = str,help = 'what is the name')
-kl.add_argument('salary',type = int,help = 'what is the salary')
+
+aru.add_argument('id',type = int,help = 'Enter user ID!')
+kl.add_argument('id',type = int,help = 'Enter the user id')
+kl.add_argument('name',type = str,help = 'Enter the name of the user')
+kl.add_argument('email',type = str,help = 'Enter the Email')
+kl.add_argument('password',type = int,help = 'Enter the password')
 
 
 @user.route('/')
@@ -19,50 +27,88 @@ class User(Resource):
     @user.expect(aru)
     def get(self):
         args  = aru.parse_args()
-        name = args.get('name')
+        id = args.get('id')
       
         try:
-            value =data.get(name)
-            return {'Salary':value},200
+            value =data[id]
+            return value,200
         except Exception as e:
-            return {'message':'not found'},400
+            return {'message':'User Not Found'},400
         
     @user.expect(kl)
     def post(self):
         args = kl.parse_args()
-        fname = args.get('fname')
-        salary = args.get('salary')
-        print(args)
-        print(data)
+        id = args.get('id')
+        name = str.capitalize(args.get('name'))
+        email = args.get('email')
+        password = args.get('password')
+       
 
         try:
-            data[fname] = salary
-            return data
+            user = {'id':id,'name':name,'email':email,'password':password}
+            data.append(user)
+            
+            return data[id]
         except Exception as e:
             return {'messag':'unsuccessful'}
         
     @user.expect(aru)
     def delete(self):
         args = aru.parse_args()
-        name = args.get('name')
+        id = args.get('id')
         try:
-            data.pop(name)
-            return f"{name} successfully deleted ...."
-        
+            data.pop(id)
+            return data
+    
         except Exception as e:
             return {'Delete unsuccessfull'}
         
+   
+@user.route('/all')
+@user.doc(responses = {200:"ok",400:'not found'})
+class Alluser(Resource):
+    global data
+    def get(self):
+        return data
+    
+###############################################################
+    
+userrole = Namespace('User Role Management','User role')
+rl = userrole.parser()
 
-    @user.expect(kl)
+rl.add_argument('id',type = int, help = 'Enter Id to update Role')
+rl.add_argument('role',type = str,help = 'What is role of user')
+
+
+@userrole.route('/')
+@userrole.doc(responses = {200:"ok",400:'not found'})
+
+class Update(Resource):
+    global data
+    
+    @userrole.expect(rl)
     def put(self):
-        args = kl.parse_args()
-        fname = args.get('fname')
-        salary = args.get('salary')
+        args = rl.parse_args()
+        id = args.get('id')
+        role = args.get('role')
         try:
-            data[fname] = salary
-            return {fname:salary}
+           update = {'role':role}
+           data[id].insert(update)          
+        
+           return data[id]
+            
         except Exception as e:
             return {'Cannot update'}
+    
+
+    
+
+    
+
+
+
+
+
             
 
 
