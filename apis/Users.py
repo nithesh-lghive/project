@@ -1,16 +1,11 @@
 
+# from app import User,db
 from flask_restx import Resource,Namespace
 from apis.util import token_required
-import apis
-from app import User,db
-
 
 data =[{'id':'0','name':'prakash','email':'prak@gmail.com','password':'12345'},
        {'id':'1','name':'nithesh','email':'nith@gmail.com','password':'56789'},
        {'id':'2','name':'divya','email':'div@gmail.com','password':'768999'}]
-print(apis.api)
-
-
 
 
 
@@ -50,9 +45,10 @@ class Users(Resource):
     @user.expect(kl)
     @user.doc(security='apikey')
     @token_required
+    @user.response(200,'Successfully added')
     def post(self):
         args = kl.parse_args()
-        # id = args.get('id')
+        id = args.get('id')
         name = str.capitalize(args.get('name'))
         email = args.get('email')
         password = args.get('password')
@@ -61,14 +57,14 @@ class Users(Resource):
         try:
             user = {'id':id,'name':name,'email':email,'password':password}
             data.append(user)
-            
-            return data[id]
+            return data
         except Exception as e:
             return {'messag':'unsuccessful'}
         
     @user.expect(aru)
     @user.doc(security='apikey')
     @token_required
+    @user.response(200,'Successfully deleted')
     def delete(self):
         args = aru.parse_args()
         id = args.get('id')
@@ -110,12 +106,17 @@ class Update(Resource):
         args = rl.parse_args()
         id = args.get('id')
         role = args.get('role')
+       
+
         try:
-           update = {'role':role}
-           data[id].insert(update)          
-        
-           return data[id]
-            
+           name = data[id].get('name')
+           email = data[id].get('email')
+           password = data[id].get('password')
+           user = {'id':id,'name':name,'email':email, 'password':password,'role':role}
+        #    data[id] in data
+           data.pop(id)
+           data.append(user)
+           return data
         except Exception as e:
             return {'Cannot update'}
     

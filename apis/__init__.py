@@ -1,5 +1,12 @@
+# from app import User,db
 from flask_restx import Api
-from Users import user,userrole
+from .Users import user,userrole
+from flask import Blueprint
+
+documents = Blueprint('api',__name__,url_prefix='/doc')
+
+
+
 
 authorizations = {
     'apikey': {
@@ -12,11 +19,13 @@ authorizations = {
 
 
 
-api = Api(version='2.0',
+api = Api(documents,
+           version='2.0',
           title='user api',
           description='this the user page',
             authorizations=authorizations, 
             security='apikey')
+
 
 
 

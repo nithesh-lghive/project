@@ -1,9 +1,7 @@
 from flask import Flask
 from flask_sqlalchemy import SQLAlchemy
-from apis import api
+from apis import documents
 from flask_migrate import Migrate
-from apis import api
-
 
 
 app = Flask(__name__)
@@ -14,7 +12,13 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] =False
 
 db = SQLAlchemy(app)
 migrate = Migrate(app,db)
-api.init_app(app)
+app.register_blueprint(documents)
+
+
+@app.route('/',methods = ['GET'])
+def index():
+    return 'Api loading...... Please set doc to the url.....'
+
 with app.app_context():
      db.init_app
      db.create_all()
@@ -39,6 +43,9 @@ class User(db.Model):
                 'Username':self.username,
                 'Email':self.email,
                 'Role':self.role}
+    
+
+
 
 
 
