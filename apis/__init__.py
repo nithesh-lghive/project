@@ -1,5 +1,5 @@
 from flask_restx import Api
-from .User import user,userrole
+from Users import user,userrole
 
 authorizations = {
     'apikey': {
