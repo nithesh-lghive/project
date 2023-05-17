@@ -1,11 +1,8 @@
-# from app import User,db
+
 from flask_restx import Api
-from .Users import user,userrole
 from flask import Blueprint
 
 documents = Blueprint('api',__name__,url_prefix='/doc')
-
-
 
 
 authorizations = {
@@ -26,8 +23,3 @@ api = Api(documents,
             authorizations=authorizations, 
             security='apikey')
 
-
-
-
-api.add_namespace(user)
-api.add_namespace(userrole)
