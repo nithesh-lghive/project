@@ -1,7 +1,9 @@
 from flask import Flask,request
 from flask_sqlalchemy import SQLAlchemy
+from sqlalchemy import desc
 from flask_mail import Mail,Message
 import jwt
+import uuid
 from apis import documents,api
 from flask_migrate import Migrate
 from flask_restx import Resource,Namespace
@@ -53,19 +55,32 @@ class User(db.Model):
     email = db.Column(db.String(100),nullable = False)
     password = db.Column(db.String(5),nullable = False)
     role = db.Column(db.String(100),default = 'Not defined')
+    date = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self,public_id,username,email,password):
+    def __init__(self,public_id,username,email,password,date):
         self.username = username
         self.email = email
         self.password = password
         self.public_id= public_id
+        self.date = date
   
     
     def json(self):
-        return {'public-id':self.public_id,
+        return {
                 'Username':self.username,
                 'Email':self.email,
-                'Role':self.role}
+                'Password':self.password,
+                'Role':self.role,
+                'Date Created':str(self.date)
+                }
+    
+    def jsons(self):
+         return {
+                'Username':self.username,
+                'Email':self.email,
+                'Role':self.role,
+                'Date Created':str(self.date)}
+    
     
 
 
@@ -99,16 +114,21 @@ user = Namespace('User Management','User details')
 kl = user.parser()
 aru = user.parser()
 upt = user.parser()
+all = user.parser()
 
-aru.add_argument('id',type = int,help = 'Enter user ID!')
-kl.add_argument('username',type = str,help = 'Enter the name of the user')
-kl.add_argument('email',type = str,help = 'Enter the Email')
-kl.add_argument('password',type = str,help = 'Enter the password')
+aru.add_argument('id',required = True,type = str,help = 'Enter user ID!')
+kl.add_argument('username',type = str,required = True,help = 'Enter the name of the user')
+kl.add_argument('email',type = str,required = True,help = 'Enter the Email')
+kl.add_argument('password',type = str,required = True,help = 'Enter the password')
+all.add_argument('filter',type = str,choices=("email", "role","first modified","last modified","first modified with limit","last modified with limit"),help = 'sort by')
+all.add_argument('email',type = str,help = 'Enter the email')
+all.add_argument('role',type = str,help = 'Enter the role')
+all.add_argument('limit',type = int,help = 'Enter limit(optional)')
 
-upt.add_argument('ID',type=int,help= 'Enetr ID')
+upt.add_argument('ID', required = True, type=str,help= 'Enter ID')
 upt.add_argument('Name',type=str,help= 'Name')
 upt.add_argument('Email',type=str,help= 'Email')
-upt.add_argument('Password',type=str, help= 'Password')
+
 
 
 ################## User model  ##############################  
@@ -116,16 +136,15 @@ upt.add_argument('Password',type=str, help= 'Password')
 @user.route('/')
 @user.doc(responses = {200:"ok",400:'not found'})
 class Users(Resource):
-    global data
     @user.doc(security='apikey')
     @user.expect(aru)
     @token_required
     def get(self):
         args  = aru.parse_args()
-        id = args.get('id')
-      
+        pub_id = args.get('id')      
         try:
-            users = User.query.filter_by(id=id).first()
+            users = User.query.filter_by(public_id = pub_id).first()
+            
             return users.json()
         except Exception as e:
             return {'message':'User Not Found'},400
@@ -145,7 +164,7 @@ class Users(Resource):
                 .filter_by(email = email)\
                 .first()
             if not user:
-                users = User(username = username,email= email, password= password)
+                users = User(public_id= str(uuid.uuid4()),username = username,email= email, password= password,date =datetime.utcnow())
                 db.session.add(users)
                 db.session.commit()
                 return users.json()
@@ -158,18 +177,18 @@ class Users(Resource):
     @user.expect(aru)
     @user.doc(security='apikey')
     @user.response(200,'Successfully deleted')
-    @token_required
+    # @token_required
     def delete(self):
         args = aru.parse_args()
         id = args.get('id')
         try:
-            user= User.query.filter_by(id =id).first()
+            user= User.query.filter_by(public_id =id).first()
             if user:
                 db.session.delete(user)
                 db.session.commit()
-                return f" ID {id} is successfully deleted"
-            else:
-                return f" ID {id} is not found"
+                return f" ID {user.username} is successfully deleted"
+           
+            return "Not found"
         except Exception as e:
             return {'Delete unsuccessfull'}
         
@@ -179,34 +198,64 @@ class Users(Resource):
     @token_required
     def put(self):
         args = upt.parse_args()
-        id = args.get('ID')
-        uname = str.capitalize(args.get("Name"))
-        uemail = str.lower(args.get('Email'))
-        upassword = args.get('Password')
+        user_id = args.get('ID')
+        uname = args.get("Name")
+        uemail = args.get('Email')
         
-       
-
         try:
-            users= User.query.filter_by(id =id).first()
+            users= User.query.filter_by(public_id =user_id).first()
             if users:
-                users.username = uname
-                users.email = uemail
-                users.password = upassword
+                if uname:
+                    users.username = uname
+                if uemail:
+                    users.email = uemail
+                
+                users.date = datetime.utcnow()
                 db.session.commit()
                 return users.json()
         except Exception as e:
-            return f"{id} not found"
+            return f"{user_id} not found"
         
         
 
 @user.route('/all')
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
+    @user.expect(all)
     @token_required
     @user.doc(security='apikey')
     def get(self):
+        args = all.parse_args()
+        filter = args.get('filter')
+        email = args.get('email')
+        role = args.get('role')
+        lim = args.get('limit')
+
+        if  filter == 'email' and email :
+            checks = User.query.filter_by(email= email)
+            return [check.jsons() for check in checks]
+        
+        if  filter == 'role' and role :
+            checks = User.query.filter_by(role= role)
+            return [check.jsons() for check in checks]
+        
+        if  filter == 'first modified':
+            checks = User.query.order_by(User.date).all()
+            return [check.jsons() for check in checks]
+        
+        if  filter == 'last modified':
+            checks = User.query.order_by(desc(User.date)).all()
+            return [check.jsons() for check in checks]
+        
+        if  filter == 'first modified with limit' and lim:
+            checks = User.query.order_by(User.date).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if  filter == 'last modified with limit' and lim:
+            checks = User.query.order_by(desc(User.date)).limit(lim).all()
+            return [check.jsons() for check in checks]
         users =  User.query.all()
-        return [user.json() for user in users]
+        return [user.jsons() for user in users]
     
 
         
@@ -223,12 +272,12 @@ fgt = auth_user.parser()
 o = auth_user.parser()
 
 
-log.add_argument('username',type = str, help = 'Enter Username')
-log.add_argument('password',type = str,help = 'Enter Password')
-fgt.add_argument('email',type = str,help = 'Enter email to recieve otp')
-o.add_argument('otp',type = str,help = 'Enter otp')
-o.add_argument('email',type = str,help = 'Enter Email')
-o.add_argument('new_pass',type = str,help = 'Enter new password')
+log.add_argument('username',required = True,type = str, help = 'Enter Username')
+log.add_argument('password',required = True,type = str,help = 'Enter Password')
+fgt.add_argument('email',type = str,required = True,help = 'Enter email to recieve otp')
+o.add_argument('otp',type = str,required = True,help = 'Enter otp')
+o.add_argument('email',type = str,required = True,help = 'Enter Email')
+o.add_argument('new_pass',type = str,required = True,help = 'Enter new password')
 
 @auth_user.route('/')
 @auth_user.doc(responses = {200:"ok",400:'not found',500:'internal server error'})
@@ -245,6 +294,7 @@ class Login(Resource):
            return "Email or Password can't be empty"
   
         user = User.query.filter_by(username = username).first()
+        
     
         if not user:
             return 'User not found',401
@@ -255,7 +305,9 @@ class Login(Resource):
                 token = jwt.encode({'username' : user.username, 
                                     'exp' : datetime.utcnow() + timedelta(minutes=45)},
                                     'secret' ,algorithm="HS256")
-                return {'token' : token}
+                key =  User.query.filter_by(username = username).first()
+                return {'token' : token,
+                        'User ID':key.public_id}
             else:
                 return 'Wrong password ',403
 
@@ -311,8 +363,8 @@ class Otp(Resource):
 userrole = Namespace('User Role Management','User role')
 rl = userrole.parser()
 
-rl.add_argument('id',type = int, help = 'Enter Id to update Role')
-rl.add_argument('role',type = str,help = 'What is role of user')
+rl.add_argument('id',required = True,type = str, help = 'Enter Id to update Role')
+rl.add_argument('role',required = True,type = str,help = 'What is role of user')
 
 
 @userrole.route('/')
@@ -328,9 +380,10 @@ class Update(Resource):
        
 
         try:
-            user= User.query.filter_by(id =id).first()
+            user= User.query.filter_by(public_id =id).first()
             if user:
                 user.role = role
+                user.date = datetime.utcnow()
                 db.session.commit()
                 return user.json()
             else:
