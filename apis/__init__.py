@@ -18,8 +18,8 @@ authorizations = {
 
 api = Api(documents,
            version='2.0',
-          title='user api',
-          description='this the user page',
+          title='User Api',
+          description='This is the user page',
             authorizations=authorizations, 
             security='apikey')
 
