@@ -12,7 +12,6 @@ from flask import request
 from datetime import datetime,timedelta
 from random import randint
 
-
 app = Flask(__name__)
 mail = Mail(app)
 
@@ -105,6 +104,7 @@ def token_required(f):
   
     return decorated
 
+
 ###########################################################
 
 ############## namespaces #################################
@@ -124,6 +124,7 @@ all.add_argument('filter',type = str,choices=("email", "role","first modified","
 all.add_argument('email',type = str,help = 'Enter the email')
 all.add_argument('role',type = str,help = 'Enter the role')
 all.add_argument('limit',type = int,help = 'Enter limit(optional)')
+all.add_argument('offset',type = int,help = 'Enter offset(optional)')
 
 upt.add_argument('ID', required = True, type=str,help= 'Enter ID')
 upt.add_argument('Name',type=str,help= 'Name')
@@ -177,7 +178,7 @@ class Users(Resource):
     @user.expect(aru)
     @user.doc(security='apikey')
     @user.response(200,'Successfully deleted')
-    # @token_required
+    @token_required
     def delete(self):
         args = aru.parse_args()
         id = args.get('id')
@@ -222,7 +223,7 @@ class Users(Resource):
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
     @user.expect(all)
-    @token_required
+    # @token_required
     @user.doc(security='apikey')
     def get(self):
         args = all.parse_args()
@@ -230,6 +231,8 @@ class Alluser(Resource):
         email = args.get('email')
         role = args.get('role')
         lim = args.get('limit')
+        offset = args.get('offset')
+        
 
         if  filter == 'email' and email :
             checks = User.query.filter_by(email= email)
@@ -254,8 +257,15 @@ class Alluser(Resource):
         if  filter == 'last modified with limit' and lim:
             checks = User.query.order_by(desc(User.date)).limit(lim).all()
             return [check.jsons() for check in checks]
-        users =  User.query.all()
-        return [user.jsons() for user in users]
+        
+        if lim or offset:
+            query = User.query.limit(lim).offset(offset)
+            data = query.all()
+            return [check.jsons() for check in data]
+        
+       
+        query = User.query.all()
+        return [user.jsons() for user in query]
     
 
         
