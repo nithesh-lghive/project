@@ -223,7 +223,7 @@ class Users(Resource):
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
     @user.expect(all)
-    # @token_required
+    @token_required
     @user.doc(security='apikey')
     def get(self):
         args = all.parse_args()
