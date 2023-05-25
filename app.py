@@ -65,8 +65,7 @@ class User(db.Model):
   
     
     def json(self):
-        return {
-                'Username':self.username,
+        return {'Username':self.username,
                 'Email':self.email,
                 'Password':self.password,
                 'Role':self.role,
@@ -120,7 +119,7 @@ aru.add_argument('id',required = True,type = str,help = 'Enter user ID!')
 kl.add_argument('username',type = str,required = True,help = 'Enter the name of the user')
 kl.add_argument('email',type = str,required = True,help = 'Enter the Email')
 kl.add_argument('password',type = str,required = True,help = 'Enter the password')
-all.add_argument('filter',type = str,choices=("email", "role","first modified","last modified","first modified with limit","last modified with limit"),help = 'sort by')
+all.add_argument('filter',type = str,choices=("first modified","last modified",'A-Z','Z-A'),help = 'sort by')
 all.add_argument('email',type = str,help = 'Enter the email')
 all.add_argument('role',type = str,help = 'Enter the role')
 all.add_argument('limit',type = int,help = 'Enter limit(optional)')
@@ -204,12 +203,23 @@ class Users(Resource):
         uemail = args.get('Email')
         
         try:
+            
             users= User.query.filter_by(public_id =user_id).first()
+            
             if users:
+                
                 if uname:
                     users.username = uname
-                if uemail:
+                e_check = User.query.filter_by(email =uemail).first()
+                if uemail and not e_check:
                     users.email = uemail
+                if e_check:
+                    return f'{uemail} already exists'
+                
+                
+                if user_id:
+                    return users.json()
+            
                 
                 users.date = datetime.utcnow()
                 db.session.commit()
@@ -223,7 +233,7 @@ class Users(Resource):
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
     @user.expect(all)
-    @token_required
+    # @token_required
     @user.doc(security='apikey')
     def get(self):
         args = all.parse_args()
@@ -232,37 +242,75 @@ class Alluser(Resource):
         role = args.get('role')
         lim = args.get('limit')
         offset = args.get('offset')
+
+       
         
 
-        if  filter == 'email' and email :
-            checks = User.query.filter_by(email= email)
-            return [check.jsons() for check in checks]
+        if email:
+            checks = User.query.filter_by(email= email).first()
+            if email and not role:
+                return checks.jsons()
+            if not checks:
+                return "Null"
         
-        if  filter == 'role' and role :
+            
+            if role and checks.role == role :
+                return checks.jsons()
+            if checks.role != role:
+                return 'Null'
+            return checks.jsons()
+        
+        if   role :
             checks = User.query.filter_by(role= role)
+
+            if filter == 'A-Z':
+                alph = checks.order_by(User.username).limit(lim).offset(offset).all()
+                return [check.jsons() for check in alph]
+        
+            if filter == 'Z-A':
+                alph = checks.order_by(desc(User.username)).limit(lim).offset(offset).all()
+                return [check.jsons() for check in alph]
+        
+            if filter == 'first modified':
+                mod = checks.order_by(User.date).limit(lim).offset(offset).all()
+                return [check.jsons() for check in mod]
+            
+            if filter == 'last modified':
+                mod = checks.order_by(desc(User.date)).limit(lim).offset(offset).all()
+                return [check.jsons() for check in mod]
+            
+            if lim or offset:
+                checks = User.query.filter_by(role= role).limit(lim).offset(offset).all()
+                return  [check.jsons() for check in checks]
+                
             return [check.jsons() for check in checks]
         
         if  filter == 'first modified':
-            checks = User.query.order_by(User.date).all()
+            checks = User.query.order_by(User.date).limit(lim).offset(offset).all() 
             return [check.jsons() for check in checks]
         
         if  filter == 'last modified':
-            checks = User.query.order_by(desc(User.date)).all()
+            checks = User.query.order_by(desc(User.date)).limit(lim).offset(offset).all()
             return [check.jsons() for check in checks]
         
-        if  filter == 'first modified with limit' and lim:
-            checks = User.query.order_by(User.date).limit(lim).all()
+      
+        if filter == 'A-Z':
+            checks = User.query.order_by(User.username).limit(lim).offset(offset).all()
             return [check.jsons() for check in checks]
         
-        if  filter == 'last modified with limit' and lim:
-            checks = User.query.order_by(desc(User.date)).limit(lim).all()
+        if filter == 'Z-A':
+            checks = User.query.order_by(desc(User.username)).limit(lim).offset(offset).all()
             return [check.jsons() for check in checks]
+
         
         if lim or offset:
             query = User.query.limit(lim).offset(offset)
             data = query.all()
             return [check.jsons() for check in data]
         
+        if lim:
+            checks = User.query.order_by(User.date).limit(lim).all()
+            return [check.jsons() for check in checks]
        
         query = User.query.all()
         return [user.jsons() for user in query]
@@ -364,6 +412,7 @@ class Otp(Resource):
                 if users:
                     users.password = new_pass
                     db.session.commit()
+                    otplist.pop()
                     return  {'Password successfully changed ...new pass word is':new_pass}
             else:
                 return "Invalid OTP"
