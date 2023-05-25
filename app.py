@@ -1,4 +1,4 @@
-from flask import Flask,request
+from flask import Flask,request,json,jsonify,Response
 from flask_sqlalchemy import SQLAlchemy
 from sqlalchemy import desc
 from flask_mail import Mail,Message
@@ -11,14 +11,18 @@ from functools import wraps
 from flask import request
 from datetime import datetime,timedelta
 from random import randint
+from flask_pymongo import PyMongo
+from bson import json_util
+from bson.json_util import dumps
 
 app = Flask(__name__)
 mail = Mail(app)
 
 
 app.config['SECRET_KEY'] == 'mysecret'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///test.db'
+# app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config["MONGO_URI"] = "mongodb://localhost:27017/swagger"
 app.config['MAIL_SERVER']='smtp.gmail.com'
 app.config['MAIL_PORT'] = 465
 app.config['MAIL_USERNAME'] = 'userapi001@gmail.com'
@@ -31,14 +35,14 @@ mail = Mail(app)
 
 app.register_blueprint(documents)
 
-db = SQLAlchemy(app)
-migrate = Migrate(app,db)
+# db = SQLAlchemy(app)
+# migrate = Migrate(app,db)
+db = PyMongo(app).db
 
-
-with app.app_context():
-     db.init_app
-     db.create_all()
-     db.session.commit()
+# with app.app_context():
+#      db.init_app
+#      db.create_all()
+#      db.session.commit()
 
 otplist = []
 
@@ -47,38 +51,38 @@ def index():
     return 'Api loading...... Please set doc to the url.....'
 ##################   models   #############################
 
-class User(db.Model):
-    id = db.Column(db.Integer,primary_key = True)
-    public_id = db.Column(db.String(50), unique = True)
-    username = db.Column(db.String(100),nullable = False)
-    email = db.Column(db.String(100),nullable = False)
-    password = db.Column(db.String(5),nullable = False)
-    role = db.Column(db.String(100),default = 'Not defined')
-    date = db.Column(db.DateTime, default=datetime.utcnow)
+# class User(db.Model):
+#     id = db.Column(db.Integer,primary_key = True)
+#     public_id = db.Column(db.String(50), unique = True)
+#     username = db.Column(db.String(100),nullable = False)
+#     email = db.Column(db.String(100),nullable = False)
+#     password = db.Column(db.String(5),nullable = False)
+#     role = db.Column(db.String(100),default = 'Not defined')
+#     date = db.Column(db.DateTime, default=datetime.utcnow)
 
-    def __init__(self,public_id,username,email,password,date):
-        self.username = username
-        self.email = email
-        self.password = password
-        self.public_id= public_id
-        self.date = date
+#     def __init__(self,public_id,username,email,password,date):
+#         self.username = username
+#         self.email = email
+#         self.password = password
+#         self.public_id= public_id
+#         self.date = date
   
     
-    def json(self):
-        return {
-                'Username':self.username,
-                'Email':self.email,
-                'Password':self.password,
-                'Role':self.role,
-                'Date Created':str(self.date)
-                }
+    # def json(self):
+    #     return {
+    #             'Username':self.username,
+    #             'Email':self.email,
+    #             'Password':self.password,
+    #             'Role':self.role,
+    #             'Date Created':str(self.date)
+    #             }
     
-    def jsons(self):
-         return {
-                'Username':self.username,
-                'Email':self.email,
-                'Role':self.role,
-                'Date Created':str(self.date)}
+    # def jsons(self):
+    #      return {
+    #             'Username':self.username,
+    #             'Email':self.email,
+    #             'Role':self.role,
+    #             'Date Created':str(self.date)}
     
     
 
@@ -137,6 +141,11 @@ upt.add_argument('Email',type=str,help= 'Email')
 @user.route('/')
 @user.doc(responses = {200:"ok",400:'not found'})
 class Users(Resource):
+    def json(self):
+        return{'username':self.username
+        }
+
+
     @user.doc(security='apikey')
     @user.expect(aru)
     @token_required
@@ -144,9 +153,11 @@ class Users(Resource):
         args  = aru.parse_args()
         pub_id = args.get('id')      
         try:
-            users = User.query.filter_by(public_id = pub_id).first()
-            
-            return users.json()
+           
+            return Response(
+                     json_util.dumps(db.User.find_one({'public_id':pub_id})),
+                        mimetype='application/json'
+)            
         except Exception as e:
             return {'message':'User Not Found'},400
         
@@ -161,14 +172,20 @@ class Users(Resource):
        
 
         try:
-            user = User.query\
-                .filter_by(email = email)\
-                .first()
+            user = db.User.find_one({'email':email})
             if not user:
-                users = User(public_id= str(uuid.uuid4()),username = username,email= email, password= password,date =datetime.utcnow())
-                db.session.add(users)
-                db.session.commit()
-                return users.json()
+                db.User.insert_one({'public_id': str(uuid.uuid4()),
+                             'username' :username,
+                             'email': email,
+                               'password': password,
+                               'date' :datetime.utcnow()})
+       
+
+                json ={'Username':username,
+                'Email':email,
+                'Password':password,
+                'Date Created':str(datetime.utcnow())}
+                return json
             else:
                 return 'User already exists. Please Log in.', 202
         except Exception as e:
@@ -183,11 +200,10 @@ class Users(Resource):
         args = aru.parse_args()
         id = args.get('id')
         try:
-            user= User.query.filter_by(public_id =id).first()
+            user= db.User.find_one({'public_id':id})
             if user:
-                db.session.delete(user)
-                db.session.commit()
-                return f" ID {user.username} is successfully deleted"
+                db.User.delete_one({'public_id':id})
+                return f"ID  is successfully deleted"
            
             return "Not found"
         except Exception as e:
@@ -204,16 +220,27 @@ class Users(Resource):
         uemail = args.get('Email')
         
         try:
-            users= User.query.filter_by(public_id =user_id).first()
+            users= db.User.find_one({'public_id' :user_id})
             if users:
-                if uname:
-                    users.username = uname
-                if uemail:
-                    users.email = uemail
                 
-                users.date = datetime.utcnow()
-                db.session.commit()
-                return users.json()
+                if uname:
+                    db.User.update_one({'public_id' :user_id},
+                                   {'$set':{'username':uname}})
+                    
+                mails = db.User.find_one({'email' :uemail})
+                if uemail and not mails:
+                    db.User.update_one({'public_id' :user_id},
+                                   {'$set':{'email':uemail}})
+                
+                db.User.update_one({'public_id' :user_id},
+                                   {'$set':{'date':datetime.utcnow()}})
+                
+                return Response(
+                     json_util.dumps(db.User.find_one({'public_id':user_id})),
+                        mimetype='application/json')
+                s
+                
+                
         except Exception as e:
             return f"{user_id} not found"
         
@@ -235,45 +262,44 @@ class Alluser(Resource):
         
 
         if  filter == 'email' and email :
-            checks = User.query.filter_by(email= email)
-            return [check.jsons() for check in checks]
+            checks = db.User.find_one({'email' : email})
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if  filter == 'role' and role :
-            checks = User.query.filter_by(role= role)
-            return [check.jsons() for check in checks]
+            checks = db.User.find_one({'role':role})
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if  filter == 'first modified':
-            checks = User.query.order_by(User.date).all()
-            return [check.jsons() for check in checks]
+            checks = db.User.find().sort('date')
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if  filter == 'last modified':
-            checks = User.query.order_by(desc(User.date)).all()
-            return [check.jsons() for check in checks]
+            checks = db.User.find().sort('date',-1)
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if  filter == 'first modified with limit' and lim:
-            checks = User.query.order_by(User.date).limit(lim).all()
-            return [check.jsons() for check in checks]
+            checks = db.User.find().sort('date').limit(lim)
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if  filter == 'last modified with limit' and lim:
-            checks = User.query.order_by(desc(User.date)).limit(lim).all()
-            return [check.jsons() for check in checks]
+            checks = db.User.find().sort('date',-1).limit(lim)
+            return Response(json_util.dumps(checks),mimetype='application/json')
         
         if lim or offset:
-            query = User.query.limit(lim).offset(offset)
-            data = query.all()
-            return [check.jsons() for check in data]
+            query = db.User.find().limit(lim)
+            return Response(json_util.dumps(query),mimetype='application/json')
         
        
-        query = User.query.all()
-        return [user.jsons() for user in query]
+        query = db.User.find({})
+        return Response(json_util.dumps(query),mimetype='application/json')
     
 
         
-####################################################### 
+# ####################################################### 
 
 
 
-#################  JWT Security ##########################
+# #################  JWT Security ##########################
 
 auth_user = Namespace('Login','login page')
 
@@ -303,25 +329,26 @@ class Login(Resource):
            
            return "Email or Password can't be empty"
   
-        user = User.query.filter_by(username = username).first()
+        user = db.User.find_one({'username':username})
         
     
         if not user:
             return 'User not found',401
         
+        psw = db.User.find_one({'password':password})
         if user:
-            if password == user.password:
+            if psw:
            
-                token = jwt.encode({'username' : user.username, 
+                token = jwt.encode({'username' :username, 
                                     'exp' : datetime.utcnow() + timedelta(minutes=45)},
                                     'secret' ,algorithm="HS256")
-                key =  User.query.filter_by(username = username).first()
+                # key =  db.User.find_one({'username':username})
                 return {'token' : token,
-                        'User ID':key.public_id}
+                        }
             else:
                 return 'Wrong password ',403
 
-################################################################################
+# ################################################################################
 
 @auth_user.route('/forgot_password')
 @auth_user.doc(responses = {200:"ok",400:'not found'})
@@ -331,7 +358,7 @@ class Forgot(Resource):
     def post(self):
         args = fgt.parse_args()
         email = args.get('email')
-        user = User.query.filter_by(email = email).first()
+        user = db.User.find_one({'email':email})
         if not user:
           return 'Email not found...  or  Invalid Email'
         if user:
@@ -346,7 +373,7 @@ class Forgot(Resource):
             msg.body = str(otp)
             mail.send(msg)
             return 'OTP Sent...'
-########################################################################################       
+# ########################################################################################       
         
 @auth_user.route('/otp')
 @auth_user.doc(responses = {200:"ok",400:'not found',500:'internal server error'})
@@ -360,46 +387,47 @@ class Otp(Resource):
         print(otplist)
         for u_otp in otplist:
             if otp == u_otp:
-                users= User.query.filter_by(email =email).first()
+                users= db.User.find_one({'email':email})
                 if users:
-                    users.password = new_pass
-                    db.session.commit()
+                    db.User.update_one({'email' :email},
+                                   {'$set':{'password':new_pass}})
+                    
                     return  {'Password successfully changed ...new pass word is':new_pass}
             else:
                 return "Invalid OTP"
 
-################# User role management  #######################################
+# ################# User role management  #######################################
 
-userrole = Namespace('User Role Management','User role')
-rl = userrole.parser()
+# userrole = Namespace('User Role Management','User role')
+# rl = userrole.parser()
 
-rl.add_argument('id',required = True,type = str, help = 'Enter Id to update Role')
-rl.add_argument('role',required = True,type = str,help = 'What is role of user')
+# rl.add_argument('id',required = True,type = str, help = 'Enter Id to update Role')
+# rl.add_argument('role',required = True,type = str,help = 'What is role of user')
 
 
-@userrole.route('/')
-@userrole.doc(responses = {200:"ok",400:'not found',500:'internal server error'})
-class Update(Resource):
-    @userrole.doc(security='apikey')
-    @token_required
-    @userrole.expect(rl)
-    def put(self):
-        args = rl.parse_args()
-        id = args.get('id')
-        role = str.capitalize(args.get('role'))
+# @userrole.route('/')
+# @userrole.doc(responses = {200:"ok",400:'not found',500:'internal server error'})
+# class Update(Resource):
+#     @userrole.doc(security='apikey')
+#     @token_required
+#     @userrole.expect(rl)
+#     def put(self):
+#         args = rl.parse_args()
+#         id = args.get('id')
+#         role = str.capitalize(args.get('role'))
        
 
-        try:
-            user= User.query.filter_by(public_id =id).first()
-            if user:
-                user.role = role
-                user.date = datetime.utcnow()
-                db.session.commit()
-                return user.json()
-            else:
-                return f"{id} not found"
-        except Exception as e:
-            return {'Cannot update'}
+#         try:
+#             user= User.query.filter_by(public_id =id).first()
+#             if user:
+#                 user.role = role
+#                 user.date = datetime.utcnow()
+#                 db.session.commit()
+#                 return user.json()
+#             else:
+#                 return f"{id} not found"
+#         except Exception as e:
+#             return {'Cannot update'}
         
 #########################################################
 
@@ -407,7 +435,7 @@ class Update(Resource):
 ########### Adding Namespaces ######################  
 
 api.add_namespace(user)
-api.add_namespace(userrole)
+# api.add_namespace(userrole)
 api.add_namespace(auth_user)
  ####################################################
 
