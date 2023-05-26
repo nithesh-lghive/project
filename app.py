@@ -117,13 +117,12 @@ all = user.parser()
 
 aru.add_argument('id',required = True,type = str,help = 'Enter user ID!')
 kl.add_argument('username',type = str,required = True,help = 'Enter the name of the user')
-kl.add_argument('email',type = str,required = True,help = 'Enter the Email')
+kl.add_argument('email',type=str, required = True,help = 'Enter the Email')
 kl.add_argument('password',type = str,required = True,help = 'Enter the password')
-all.add_argument('filter',type = str,choices=("first modified","last modified",'A-Z','Z-A'),help = 'sort by')
-all.add_argument('email',type = str,help = 'Enter the email')
-all.add_argument('role',type = str,help = 'Enter the role')
-all.add_argument('limit',type = int,help = 'Enter limit(optional)')
-all.add_argument('offset',type = int,help = 'Enter offset(optional)')
+all.add_argument('sort by',type = str,help = 'username,email,date_modified,role')
+all.add_argument('order by',type = str,choices=('ASC','DESC'),help = 'Order by')
+all.add_argument('limit',type = int,help = 'Enter limit')
+
 
 upt.add_argument('ID', required = True, type=str,help= 'Enter ID')
 upt.add_argument('Name',type=str,help= 'Name')
@@ -163,6 +162,7 @@ class Users(Resource):
             user = User.query\
                 .filter_by(email = email)\
                 .first()
+            
             if not user:
                 users = User(public_id= str(uuid.uuid4()),username = username,email= email, password= password,date =datetime.utcnow())
                 db.session.add(users)
@@ -207,25 +207,32 @@ class Users(Resource):
             users= User.query.filter_by(public_id =user_id).first()
             
             if users:
-                
                 if uname:
                     users.username = uname
+                    db.session.commit()
+
                 e_check = User.query.filter_by(email =uemail).first()
                 if uemail and not e_check:
                     users.email = uemail
+                    db.session.commit()
+
                 if e_check:
                     return f'{uemail} already exists'
                 
                 
                 if user_id:
                     return users.json()
+                
+            
             
                 
                 users.date = datetime.utcnow()
                 db.session.commit()
                 return users.json()
+            if not users:
+                return 'User Not found'
         except Exception as e:
-            return f"{user_id} not found"
+            return "User not found"
         
         
 
@@ -233,88 +240,85 @@ class Users(Resource):
 @user.doc(responses = {200:"ok",400:'not found'})
 class Alluser(Resource):
     @user.expect(all)
-    # @token_required
+    @token_required
     @user.doc(security='apikey')
     def get(self):
         args = all.parse_args()
-        filter = args.get('filter')
-        email = args.get('email')
-        role = args.get('role')
+        order = args.get('order by')
+        sort = args.get('sort by')
         lim = args.get('limit')
-        offset = args.get('offset')
-
-       
-        
-
-        if email:
-            checks = User.query.filter_by(email= email).first()
-            if email and not role:
-                return checks.jsons()
-            if not checks:
-                return "Null"
-        
-            
-            if role and checks.role == role :
-                return checks.jsons()
-            if checks.role != role:
-                return 'Null'
-            return checks.jsons()
-        
-        if   role :
-            checks = User.query.filter_by(role= role)
-
-            if filter == 'A-Z':
-                alph = checks.order_by(User.username).limit(lim).offset(offset).all()
-                return [check.jsons() for check in alph]
-        
-            if filter == 'Z-A':
-                alph = checks.order_by(desc(User.username)).limit(lim).offset(offset).all()
-                return [check.jsons() for check in alph]
-        
-            if filter == 'first modified':
-                mod = checks.order_by(User.date).limit(lim).offset(offset).all()
-                return [check.jsons() for check in mod]
-            
-            if filter == 'last modified':
-                mod = checks.order_by(desc(User.date)).limit(lim).offset(offset).all()
-                return [check.jsons() for check in mod]
-            
-            if lim or offset:
-                checks = User.query.filter_by(role= role).limit(lim).offset(offset).all()
-                return  [check.jsons() for check in checks]
-                
-            return [check.jsons() for check in checks]
-        
-        if  filter == 'first modified':
-            checks = User.query.order_by(User.date).limit(lim).offset(offset).all() 
-            return [check.jsons() for check in checks]
-        
-        if  filter == 'last modified':
-            checks = User.query.order_by(desc(User.date)).limit(lim).offset(offset).all()
-            return [check.jsons() for check in checks]
-        
-      
-        if filter == 'A-Z':
-            checks = User.query.order_by(User.username).limit(lim).offset(offset).all()
-            return [check.jsons() for check in checks]
-        
-        if filter == 'Z-A':
-            checks = User.query.order_by(desc(User.username)).limit(lim).offset(offset).all()
-            return [check.jsons() for check in checks]
 
         
-        if lim or offset:
-            query = User.query.limit(lim).offset(offset)
-            data = query.all()
-            return [check.jsons() for check in data]
+
+        if sort == 'username' and order == 'ASC':
+             checks = User.query.order_by(User.username).limit(lim).all()
+             return [check.jsons() for check in checks]
         
-        if lim:
+        if sort == 'username' and order == 'DESC':
+             checks = User.query.order_by(desc(User.username)).limit(lim).all()
+             return [check.jsons() for check in checks]
+        
+        if sort == 'email' and order == 'ASC':
+            checks = User.query.order_by(User.email).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'email' and order == 'DESC':
+            checks = User.query.order_by(desc(User.email)).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'date_modified' and order == 'ASC':
             checks = User.query.order_by(User.date).limit(lim).all()
             return [check.jsons() for check in checks]
+        
+        if sort == 'date_modified' and order == 'DESC':
+            checks = User.query.order_by(desc(User.date)).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'role' and order == 'ASC':
+            checks = User.query.order_by(User.role).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'role' and order == 'DESC':
+            checks = User.query.order_by(desc(User.role)).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        
+        if sort == 'username':
+             checks = User.query.order_by(User.username).limit(lim).all()
+             return [check.jsons() for check in checks]
+        
+        if sort == 'email':
+            checks = User.query.order_by(User.email).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'date_modified':
+            checks = User.query.order_by(User.date).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        if sort == 'role':
+            checks = User.query.order_by(User.role).limit(lim).all()
+            return [check.jsons() for check in checks]
+        
+        
+        if  order == 'DESC' and  not sort:
+            checks = User.query.order_by(desc(User.date)).limit(lim).all()
+            return [user.jsons() for user in checks]
+        
+        if  not sort:  
+           query = User.query.limit(lim).all()
+           return [user.jsons() for user in query]
+        
+        if not sort =='username' and not sort =='email' and not sort =='date_modified' and not sort =='role':
+            return 'You can only sort by username,email,date_modified and role ..check the spelling again'
+        
+
        
-        query = User.query.all()
-        return [user.jsons() for user in query]
     
+
+       
+        
+
+      
 
         
 ####################################################### 
